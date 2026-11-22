@@ -5,9 +5,18 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      provider:
+        description: "anthropic (needs the ANTHROPIC_API_KEY secret) or openai (needs OPENAI_API_KEY)"
+        type: choice
+        options: [anthropic, openai]
+        default: anthropic
       model:
-        description: "Anthropic model to evaluate (needs the ANTHROPIC_API_KEY secret)"
+        description: "Model name, e.g. claude-sonnet-5-5"
         required: false
+      k:
+        description: "Trials per scenario"
+        required: false
+        default: "8"
 
 jobs:
   test:
@@ -51,12 +60,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e ".[anthropic]"
-      - run: support-agent-eval run --agent anthropic --model "${{ inputs.model }}" -k 3 --out llm.json --report llm.md
+      - run: pip install -e ".[anthropic,openai]"
+      - name: Evaluate ${{ inputs.provider }} ${{ inputs.model }} (k=${{ inputs.k }})
+        run: >
+          support-agent-eval run --agent "${{ inputs.provider }}" --model "${{ inputs.model }}"
+          -k "${{ inputs.k }}" --out "llm-${{ inputs.model }}.json" --report "llm-${{ inputs.model }}.md"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - if: always()
+        run: cat llm-*.md >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: llm-eval-results
-          path: llm.*
+          name: llm-eval-${{ inputs.model }}
+          path: llm-*
