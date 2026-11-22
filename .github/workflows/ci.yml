@@ -34,6 +34,8 @@ jobs:
       - run: pip install -e .
       - name: Reference agent must pass every scenario with no violations
         run: support-agent-eval run --agent rules --min-pass-rate 1.0 --max-violations 0
+      - name: Reproduce the paper's experiments
+        run: python experiments/run_experiments.py > /dev/null
       - name: Grader sanity check (the unsafe agent must FAIL the gate)
         run: |
           if support-agent-eval run --agent naive --max-violations 0 > /dev/null; then

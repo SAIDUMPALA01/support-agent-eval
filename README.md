@@ -82,7 +82,7 @@ pip install -e ".[dev]"
 support-agent-eval run --agent rules            # 24/24, 0 violations
 support-agent-eval run --agent naive            # see what the grader catches
 support-agent-eval chat --agent rules           # talk to it; tool calls are printed
-pytest                                          # 48 tests, no API key needed
+pytest                                          # 52 tests, no API key needed
 ```
 
 ```
@@ -117,6 +117,21 @@ support-agent-eval run --agent rules --min-pass-rate 1.0 --max-violations 0   # 
 
 CI runs this gate on the `rules` agent. It also runs the `naive` agent and *requires it to fail*, which checks that the grader can still catch a bad agent. You can trigger a manual workflow run to score an LLM when an `ANTHROPIC_API_KEY` secret is set.
 
+## Experiments in the paper
+
+[`experiments/run_experiments.py`](experiments/run_experiments.py) reproduces every number in the accompanying paper, *Grade What the Agent Did, Not What It Said*. It runs in under a second, needs no API key, and is seeded:
+
+- **E1** compares the reference agent with the unsafe agent.
+- **E2** plants 9 single faults in the reference agent and checks that the grader catches each one. It catches all 9.
+- **E3** grades the same conversations twice, from the audit log and from the transcript alone. The transcript-only grader misses 3 of the 9 faults and 17 of the 34 failing conversations.
+- **E4** measures how pass^k falls for an agent that lapses at random.
+
+```bash
+python experiments/run_experiments.py   # writes experiments/results/results.json
+```
+
+`tests/test_experiments.py` pins these headline numbers, so a code change can't silently alter them.
+
 ## Project layout
 
 ```
@@ -131,7 +146,7 @@ src/support_agent/
   runner.py       runs scenarios k times, computes pass rate / pass^k / violations
   cli.py          `run` and `chat`
   data/           store.json (fictional customers) and scenarios.json
-tests/            48 pytest tests (LLM clients are faked, so no key or network)
+tests/            52 pytest tests (LLM clients are faked, so no key or network)
 results/          reports for the two offline agents
 ```
 

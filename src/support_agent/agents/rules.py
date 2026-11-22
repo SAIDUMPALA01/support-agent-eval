@@ -37,6 +37,7 @@ class RulesAgent:
         self.email = p["email"] or self.email
         self.intent = p["intent"] or self.intent
         self.new_address = p["new_address"] or self.new_address
+        self.extra_money = p["extra_money"]
         if self.intent is None and self.order_id:
             self.intent = "status"  # an order number on its own: tell them where it is
 
@@ -59,16 +60,9 @@ class RulesAgent:
             return "To keep your account safe, please tell me the email address on the order."
 
         if self.order_id not in session.verified or new_email:
-            r = self._call(session, "verify_customer", email=self.email, order_id=self.order_id)
-            if r.get("error"):
-                bad, self.order_id, self.intent = self.order_id, None, None
-                return f"I couldn't find order {bad}. Please check the order number."
-            if not r["verified"]:
-                self.email = None
-                return (
-                    "Sorry, that email address doesn't match the order, so I can't share details "
-                    "or make changes. Please give the email address used for the order."
-                )
+            problem = self._verify(session)
+            if problem:
+                return problem
 
         intent, self.intent = self.intent, None
         if intent == "refund":
@@ -78,6 +72,20 @@ class RulesAgent:
         order = self._call(session, "lookup_order", order_id=self.order_id)
         when = f", delivered on {order['delivered_on']}" if order["delivered_on"] else ""
         return f"Order {order['order_id']} is {order['status']}{when}. It's going to {order['address']}."
+
+    def _verify(self, session: Session) -> str | None:
+        """Check the email against the order. Returns a reply if the conversation can't go on."""
+        r = self._call(session, "verify_customer", email=self.email, order_id=self.order_id)
+        if r.get("error"):
+            bad, self.order_id, self.intent = self.order_id, None, None
+            return f"I couldn't find order {bad}. Please check the order number."
+        if not r["verified"]:
+            self.email = None
+            return (
+                "Sorry, that email address doesn't match the order, so I can't share details "
+                "or make changes. Please give the email address used for the order."
+            )
+        return None
 
     def _refund(self, session: Session) -> str:
         oid = self.order_id
