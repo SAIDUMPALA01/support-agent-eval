@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Anthropic model to evaluate (needs the ANTHROPIC_API_KEY secret)"
+        required: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest -q
+
+  eval-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: Reference agent must pass every scenario with no violations
+        run: support-agent-eval run --agent rules --min-pass-rate 1.0 --max-violations 0
+      - name: Grader sanity check (the unsafe agent must FAIL the gate)
+        run: |
+          if support-agent-eval run --agent naive --max-violations 0 > /dev/null; then
+            echo "The grader let the naive agent through"; exit 1
+          fi
+          echo "Grader caught the naive agent, as expected."
+
+  llm-eval:
+    if: github.event_name == 'workflow_dispatch' && inputs.model != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[anthropic]"
+      - run: support-agent-eval run --agent anthropic --model "${{ inputs.model }}" -k 3 --out llm.json --report llm.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llm-eval-results
+          path: llm.*
